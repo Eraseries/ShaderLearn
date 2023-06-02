@@ -1,0 +1,22 @@
+Android/
+Assets/StreamingAssets/
+ProjectSettings/
+Library/
+Temp/
+Logs/
+obj/
+.vs/
+Assembly-CSharp.csproj
+Assembly-CSharp-Editor.csproj
+Assembly-CSharp-firstpass.csproj
+LoopScrollRect.Editor.csproj
+LoopScrollRect.Runtime.csproj
+MyGameDemo.sln
+UnityGameFramework.Editor.csproj
+UnityGameFramework.Runtime.csproj
+zframework.ui.joystick.csproj
+zframework.ui.joystick.demo.csproj
+zframework.ui.joystick.editor.csproj
+.vsconfig
+Unity Timer.csproj
+打包APK过程/
