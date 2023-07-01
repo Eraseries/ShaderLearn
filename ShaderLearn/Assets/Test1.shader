@@ -1,4 +1,4 @@
-﻿Shader "MyShader/Test1"
+Shader "MyShader/Test1"
 {
     //属性
     //注意这里定的属性不能直接拿来使用
@@ -12,7 +12,7 @@
         _Range("Range",Range(8,200)) = 10
         _Vector("Vector",Vector) = (1,2,3,4)
         _Color("Color",Color) = (0.5,0.5,0.5,0.5)
-        _2D("Texture",2D) = "white"{}
+        _MainTex("Main Tex",2D) = "white"{}
         _3D("Texture",3D) = "white"{}
         _Diffuse("Diffuse Color",Color) = (1,1,1,1)
         _Specular("Specular Color",Color) = (1,1,1,1)
@@ -29,8 +29,8 @@
             float _Range;
             fixed4 _Diffuse; 
             fixed4 _Specular;
-
-
+            sampler2D _MainTex;
+            float4 _MainTex_ST;
             //从应用程序传递到定点函数的语义有哪些a2v
             //POSITION 顶点坐标(模型空间下的)
             //NORMAL 法线(模型空间下的)
@@ -40,13 +40,8 @@
             struct a2v{
                 fixed4 vertex:POSITION; //告诉unity把模型空间下的顶点坐标填充给vertex
                 fixed3 normal:NORMAL;//告诉unity 把模型空间下的法线方向填充给normal 
-                fixed4 TEXCOORD:TEXCOORD0;//告诉unity把第一套纹理坐标填充给texcoord
+                fixed4 texcoord:TEXCOORD0;//告诉unity把第一套纹理坐标填充给texcoord
             };
-
-
-
-
-
 
 
 
@@ -59,6 +54,7 @@
                 float4 position:SV_POSITION;
                 float3 worldNormal:TEXCOORD0;
                 float3 worldVertex:TEXCOORD1;
+                float2 uv:TEXCOORD2;
             };
 
 
@@ -79,11 +75,6 @@
             //片元函数声明
             //基本作用是 返回模型对应的屏幕上的每一个像素的颜色值
             #pragma fragment frag
-            //float4 vert(float4 v : POSITION):SV_POSITION{//通过语义告诉系统，我这个参数是干什么的，比如POSITION是告诉系统我需要顶点坐标
-            //SV_POSITION这个语义用来解释说明返回值，意思是返回值是裁剪空间下的顶点坐标
-            //    float4 pos = mul(unity_MatrixVP,v);
-            //    return pos;
-            //}
 
 
             #include "Lighting.cginc" //取得第一个直射光的颜色_LightColor0  第一个直射光的位置_WorldSpaceLightPos0
@@ -92,7 +83,8 @@
                 v2f f;
                 f.position = UnityObjectToClipPos(v.vertex); //将顶点坐标从模型空间转换到裁剪空间
                 f.worldVertex = mul((float3x3) unity_ObjectToWorld,v.vertex);//mul(v.vertex,(float3x3) unity_WorldToObject);
-                f.worldNormal = mul((float3x3) unity_ObjectToWorld,v.normal);//mul(v.normal,(float3x3) unity_WorldToObject);
+                f.worldNormal = UnityObjectToWorldNormal(v.normal);
+                f.uv = v.texcoord.xy * _MainTex_ST.xy + _MainTex_ST.zw;
                 return f;
             }
 
@@ -108,17 +100,26 @@
                 fixed3 normalDir = normalize(f.worldNormal);
 
                 //直射光
-                fixed3 lightDir = normalize(_WorldSpaceLightPos0.xyz); //对于每个顶点来说，光的位置就是光的方向，因为光是平行光
+                //fixed3 lightDir = normalize(_WorldSpaceLightPos0.xyz); //对于每个顶点来说，光的位置就是光的方向，因为光是平行光
+                fixed3 lightDir = normalize(UnityWorldSpaceLightDir(f.worldVertex).xyz);
 
+
+                //uv某点坐标的颜色
+                //tex2D(_MainTex,f.uv.xy)
+                fixed3 texColor = tex2D(_MainTex,f.uv.xy) * _Color.rgb;
 
                 //高光反射
                 //Specular = 直射光的颜色 * pow（max(cos(反射光方向和屏幕方向的夹角）,0)，高光参数）     pow x的y次方. 高光参数越大，高光范围越小
-                fixed3 reflectDir = normalize(reflect(-lightDir,normalDir));
-                fixed3 viewDir = normalize(_WorldSpaceCameraPos.xyz - f.worldVertex.xyz);
-                fixed3 specularDir = _LightColor0.rgb * _Specular.rgb * pow(max(dot(reflectDir,viewDir),0),_Range);
+                //fixed3 reflectDir = normalize(reflect(-lightDir,normalDir));
+                //fixed3 viewDir = normalize(_WorldSpaceCameraPos.xyz - f.worldVertex.xyz);
+                fixed3 viewDir = normalize(UnityWorldSpaceViewDir(f.worldVertex).xyz);
+
+                fixed3 halfDir = normalize(lightDir + viewDir);
+
+                fixed3 specularDir = _LightColor0.rgb * _Specular.rgb * pow(max(dot(normalDir,halfDir),0),_Range);
 
                 //漫反射
-                fixed3 diffuse = _LightColor0.rgb * (dot(normalDir,lightDir) * 0.5 + 0.5) * _Diffuse.rgb;//max(dot(normalDir,lightDir),0) * _Diffuse.rgb;//取得漫反射颜色
+                fixed3 diffuse = _LightColor0.rgb * (dot(normalDir,lightDir) * 0.5 + 0.5) * texColor.rgb;//max(dot(normalDir,lightDir),0) * _Diffuse.rgb;//取得漫反射颜色
                 fixed3 tempColor = diffuse + ambient + specularDir;
                 
                 return fixed4(tempColor,1);
@@ -129,7 +130,7 @@
         }
     }
 
-    Fallback "VertexLit"
+    Fallback "Specular"
 }
 
 
@@ -146,8 +147,35 @@
 
 
 //1自发光
+
+
+
 //2高光反射     Specular = 直射光的颜色 * pow（max(cos(反射光方向和屏幕方向的夹角）,0)，高光参数）     pow x的y次方. 高光参数越大，高光范围越小
+//Phong光照模型     
+//Specular = 直射光的颜色 * pow（max(cos(反射光方向和屏幕方向的夹角）,0)，高光参数）
+
+//Blinn-Phong光照模型
+//Specular = 直射光的颜色 * pow（max(cos(法线方向 和 X的夹角）,0)，高光参数）    X为直射光的方向和屏幕方向的夹角 / 2
+
+
+
+
+
+
 //3漫反射       Diffuse = 直射光的颜色 * max(0,cos(直射光方向和法线方向的夹角)) 
+//兰伯特光照模型
+//Diffuse = 直射光颜色 * max(0,cos(光和法线的夹角))
+
+//半兰伯特光照模型
+//Diffuse = 直射光颜色 * （cos(光和法线的夹角)  * 0.5  + 0.5）
+
+
+
+
+
+
+
+
 //4环境光       通过系统变量直接取到环境光UNITY_LIGHTMODEL_AMBIENT.rgb
 
 
@@ -169,8 +197,30 @@
 //两个颜色融合 相乘  
 //两个颜色叠加 相加
 
-//兰伯特光照模型
-//Diffuse = 直射光颜色 * max(0,cos(光和法线的夹角))
+//UnityCG.cginc中一些常用的函数
 
-//半兰伯特光照模型
-//Diffuse = 直射光颜色 * （cos(光和法线的夹角)  * 0.5  + 0.5）
+//摄像机方向（视角方向）
+//float3 WorldSpaceViewDir(float4 v)        根据模型空间中的顶点坐标得到（世界空间）从这个点到摄像机的观察方向
+//float3 UnityWorldSpaceViewDir(float4 v)   世界空间中的顶点坐标====》世界空间从这个点到摄像机的观察方向
+//float3 ObjSpaceViewDir(float4 v)          模型空间中的顶点坐标====》模型空间从这个点到摄像机的观察方向
+
+//光源方向
+//float3 WorldSpaceLightDir(float4 v)       模型空间中的顶点坐标====》世界空间中从这个点到光源的方向
+//float3 UnityWorldSpaceLightDir(float4 v)  世界空间中的顶点坐标====》世界空间中从这个点到光源的方向
+//float3 ObjSpaceLightDir(float4 v)         模型空间中的顶点坐标====》世界空间中从这个点到光源的方向
+
+//方向转换
+//float3 UnityObjectToWorldNormal(float3 normal)        把法线方向  模型空间====》世界空间
+//float3 UnityObejctToWorldDir(float3 dir)              把方向      模型空间====》世界空间
+//float3 UnityWorldToObjectDir(float3 dir)              把方向      世界空间====》模拟空间 
+
+
+
+
+//漫反射 = 直射光颜色 * 法线 和 点到直射光的线的点积
+//
+
+
+
+//pixel = (normal + 1) / 2    法线的范围  （-1,1）
+//normal = pixel * 2 - 1

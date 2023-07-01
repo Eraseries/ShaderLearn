@@ -91,10 +91,24 @@
                 f.position = UnityObjectToClipPos(v.vertex); //将顶点坐标从模型空间转换到裁剪空间
 
                 fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.rgb;
+
+
                 fixed3 normalDir = normalize(mul(v.normal,(float3x3) unity_WorldToObject));
+
+
                 fixed3 lightDir = normalize(_WorldSpaceLightPos0.xyz); //对于每个顶点来说，光的位置就是光的方向，因为光是平行光
-                fixed3 diffuse = _LightColor0.rgb * max(dot(normalDir,lightDir),0) * _Diffuse.rgb;//取得漫反射颜色
-                f.color = diffuse + ambient;
+
+
+                fixed3 reflectDir = normalize(reflect(-lightDir,normalDir));
+
+                fixed3 viewDir = normalize(_WorldSpaceCameraPos.xyz - v.vertex.xyz);
+
+                fixed3 specularDir = _LightColor0.rgb * pow(max(dot(reflectDir,viewDir),0),_Range);
+
+                fixed3 diffuse = _LightColor0.rgb * (dot(normalDir,lightDir) * 0.5 + 0.5 )* _Diffuse.rgb;//取得漫反射颜色
+
+
+                f.color = diffuse + ambient + specularDir;
                 return f;
             }
 

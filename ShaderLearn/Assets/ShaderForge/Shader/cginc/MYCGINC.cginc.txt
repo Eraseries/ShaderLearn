@@ -1,0 +1,14 @@
+#ifndef MY_CGINC
+#define MY_CGINC
+
+float3 ColAmbient (float3 n, float3 uCol, float3 sCol, float3 dCol)
+{
+    float uMask = max(0.0, n.g);
+    float dMask = max(0.0, -n.g);
+    float sMask = 1.0 - uMask - dMask;
+    float3 envCol = uCol * uMask + sCol * sMask + dCol * dMask;
+
+    return envCol;
+}
+
+#endif
